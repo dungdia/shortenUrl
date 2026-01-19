@@ -1,0 +1,31 @@
+[package]
+name = "shortenUrl"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# Database và Caching
+sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "mysql", "chrono"] }
+redis = { version = "0.24", features = ["tokio-comp", "aio"] }
+
+# Serialization và Validation
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+validator = { version = "0.16", features = ["derive"] }
+
+# OpenAPI Documentation
+utoipa = { version = "4.1", features = ["axum_extras"] }
+utoipa-scalar = { version = "0.1", features = ["axum"] }
+
+# Tiện ích
+dotenvy = "0.15"       # Quản lý file .env
+chrono = { version = "0.4", features = ["serde"] } # Quản lý thời gian
+nanoid = "0.4"         # Sinh mã rút gọn ngẫu nhiên
+tracing = "0.1"        # Logging hệ thống
+tracing-subscriber = "0.3"
+deadpool-redis = { version = "0.14", features = ["rt_tokio_1"] }
+thiserror = "2.0.18"
