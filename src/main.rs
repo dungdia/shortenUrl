@@ -1,8 +1,12 @@
-use axum::{Router, http::Method};
+use axum::{
+    Router, routing::get,
+};
 use dotenvy::dotenv;
-use tower_http::cors::{Any, CorsLayer};
+use std::{env, net::SocketAddr};
 use utoipa::OpenApi;
-use utoipa_scalar::{Scalar, Servable};
+use utoipa_scalar::{Scalar, Servable as ScalarServable};
+
+mod utils;
 
 // Cấu hình OpenAPI
 #[derive(OpenApi)]
@@ -12,17 +16,27 @@ use utoipa_scalar::{Scalar, Servable};
 )]
 struct ApiDoc;
 
+
+async fn hello_world() -> &'static str {
+    "Hello, World!"
+}
+
+
+
 #[tokio::main]
 async fn main() {
     // 1. Load biến môi trường
     dotenv().ok();
 
-    let mut openapi = ApiDoc::openapi();
+    let db_context = utils::db::DbContext::init().await;
 
-    
+    db_context.check_database_connection().await.expect("Database connection failed");
+
+    let openapi = ApiDoc::openapi();    
 
     let app: axum::Router = Router::new()
     .merge(Scalar::with_url("/scalar", openapi))
+    .route("/", get(hello_world))
     .with_state(());
     
     let host = env::var("SERVER_HOST").expect("SERVER_HOST not found");
