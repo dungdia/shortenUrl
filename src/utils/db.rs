@@ -25,13 +25,4 @@ impl DbContext {
             mysql_pool,
         }
     }
-
-    pub async fn check_database_connection(self) -> Result<(), sqlx::Error> {
-        sqlx::query_as::<sqlx::MySql,()>(
-            "SELECT 1"
-        ).fetch_one(&self.mysql_pool).await?;
-    
-        println!("✅ Database connection is healthy!");
-        Ok(())
-    }
 }

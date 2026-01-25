@@ -1,12 +1,20 @@
-use axum::{
-    Router, routing::get,
-};
+use axum::Router;
 use dotenvy::dotenv;
-use std::{env, net::SocketAddr};
+use repository::url_repo;
+use service::url_service::UrlService;
+use std::{env, net::SocketAddr, sync::Arc};
 use utoipa::OpenApi;
 use utoipa_scalar::{Scalar, Servable as ScalarServable};
 
 mod utils;
+mod repository;
+mod service;
+mod routes;
+mod models;
+
+pub struct AppState {
+    pub url_service: UrlService,
+}
 
 // Cấu hình OpenAPI
 #[derive(OpenApi)]
@@ -17,12 +25,6 @@ mod utils;
 struct ApiDoc;
 
 
-async fn hello_world() -> &'static str {
-    "Hello, World!"
-}
-
-
-
 #[tokio::main]
 async fn main() {
     // 1. Load biến môi trường
@@ -30,14 +32,20 @@ async fn main() {
 
     let db_context = utils::db::DbContext::init().await;
 
-    db_context.check_database_connection().await.expect("Database connection failed");
-
-    let openapi = ApiDoc::openapi();    
+    let url_repo = Arc::new(url_repo::UrlRepository::new(db_context.mysql_pool));
+    let url_service = UrlService::new(url_repo);
+    
+    let app_state = Arc::new(AppState {
+        url_service,
+    });
+    
+    let mut openapi = ApiDoc::openapi();
+    openapi.merge(routes::url_routes::UrlDoc::openapi());
 
     let app: axum::Router = Router::new()
     .merge(Scalar::with_url("/scalar", openapi))
-    .route("/", get(hello_world))
-    .with_state(());
+    .merge(routes::url_routes::create_route())
+    .with_state(app_state);
     
     let host = env::var("SERVER_HOST").expect("SERVER_HOST not found");
     let port = env::var("SERVER_PORT").expect("SERVER_PORT not found");
