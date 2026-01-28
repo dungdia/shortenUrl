@@ -6,7 +6,7 @@ use crate::{AppState};
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(get_all_url,),
+    paths(get_all_url,redirect_url),
     components(
         schemas()
     ),
@@ -33,8 +33,34 @@ pub async fn get_all_url(State(state): State<Arc<AppState>>) -> impl IntoRespons
     } 
 }
 
+#[utoipa::path(
+    get,
+    path = "/{short_code}",
+    tag = "URL Management",
+    params(("short_code" = String, Path, description = "Mã rút gọn 10 ký tự")),
+    responses(
+        (status = 302, description = "Redirect thành công"),
+        (status = 404, description = "Không tìm thấy link")
+    )
+)]
+pub async fn redirect_url(Path(short_code): Path<String>,State(state): State<Arc<AppState>>) -> impl IntoResponse{
+    match state.url_service.get_url_by_code(&short_code).await {
+        Ok(urls) =>  match urls {
+                Some(url_model) => {
+                    return Redirect::temporary(&url_model.long_url).into_response();},
+                None => StatusCode::NOT_FOUND.into_response()
+        },
+        Err(sqlx::Error::RowNotFound) => StatusCode::NOT_FOUND.into_response(),
+        Err(err) => {
+            eprintln!("{}",err);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        },
+ }
+}
+
 
 pub fn create_route() -> Router<Arc<AppState>> {
     Router::new()
     .route("/api/get_all", get(get_all_url))
+    .route("/:short_code", get(redirect_url))
 } 

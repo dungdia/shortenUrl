@@ -20,4 +20,13 @@ impl UrlRepository {
         .fetch_all(&self.mysql_pool)
         .await
     }
+
+    pub async fn get_url_by_code(&self, short_code: &str) -> Result<Option<UrlModel>, sqlx::Error> {
+        sqlx::query_as::<sqlx::MySql,UrlModel>(
+            "SELECT id, short_code, long_url, created_at FROM urls WHERE short_code = ?"
+        )
+        .bind(short_code)
+        .fetch_optional(&self.mysql_pool)
+        .await
+    }
 }

@@ -17,5 +17,9 @@ impl UrlService {
 
         Ok(result)
     }
+
+    pub async fn get_url_by_code(&self, short_code: &str) -> Result<Option<UrlModel>, sqlx::Error> {
+        self.repo.get_url_by_code(short_code).await
+    }
     
 }
