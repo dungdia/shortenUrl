@@ -7,7 +7,9 @@ use crate::{AppState, dtos::url_dto::{UrlRequest, UrlResponse}};
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(get_all_url,redirect_url),
+    paths(get_all_url
+        ,redirect_url
+        ,create_short_url),
     components(
         schemas(UrlRequest, UrlResponse)
     ),
@@ -111,4 +113,5 @@ pub fn create_route() -> Router<Arc<AppState>> {
     Router::new()
     .route("/api/get_all", get(get_all_url))
     .route("/:short_code", get(redirect_url))
+    .route("/api/create", post(create_short_url))
 } 
