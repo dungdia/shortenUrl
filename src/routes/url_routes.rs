@@ -2,13 +2,14 @@ use std::{ env, sync::Arc};
 
 use axum::{ Json, Router, extract::{Path, State}, http::{StatusCode}, response::{IntoResponse, Redirect}, routing::{delete, get, post, put}};
 use utoipa::OpenApi;
-use crate::{AppState};
+use validator::Validate;
+use crate::{AppState, dtos::url_dto::{UrlRequest, UrlResponse}};
 
 #[derive(OpenApi)]
 #[openapi(
     paths(get_all_url,redirect_url),
     components(
-        schemas()
+        schemas(UrlRequest, UrlResponse)
     ),
     tags((name = "URL Management", description = "Các API thao tác với mã rút gọn"))
 )]
@@ -56,6 +57,53 @@ pub async fn redirect_url(Path(short_code): Path<String>,State(state): State<Arc
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         },
  }
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/create",
+    tag = "URL Management",
+    request_body = UrlRequest,
+    responses(
+        (status = 201, description = "Tạo mã rút gọn thành công", body = UrlResponse),
+        (status = 400, description = "URL không hợp lệ"),
+        (status = 500, description = "Lỗi hệ thống")
+    )
+)]
+pub async fn create_short_url(State(state): State<Arc<AppState>>,
+    Json(payload): Json<UrlRequest>) -> impl IntoResponse {
+
+    //get base_url from env
+    let base_url = match env::var("BASE_URL") {
+    Ok(val) => val,
+    Err(_) => {
+        eprintln!("Error: BASE_URL not found in .env file");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    };
+
+    //check body validate
+    if let Err(err) = payload.validate() {
+        return (StatusCode::BAD_REQUEST, format!("Validation error: {:?}", err.to_string())).into_response();
+    }
+
+    match state.url_service
+    .create_short_url(&payload.long_url)
+    .await {
+        Ok(code) => {
+        Json(
+            UrlResponse {
+            long_url: payload.long_url, 
+            short_code: format!("{}/{}",base_url,code), 
+            created_at: chrono::Utc::now()
+            }
+        ).into_response() 
+        }
+        Err(err) => {
+            eprintln!("some thing went wrong when create short_url: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
 }
 
 

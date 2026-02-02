@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use nanoid::nanoid;
+
 use crate::repository::url_repo::UrlRepository;
 use crate::models::url_models::UrlModel;
 
@@ -22,4 +24,20 @@ impl UrlService {
         self.repo.get_url_by_code(short_code).await
     }
     
+    fn generate_short_code(&self) -> String{
+        nanoid!(10) //generate new short code with length = 10 using nanoid
+    }
+
+    pub async fn create_short_url(&self, long_urls: &str) -> Result<String,sqlx::Error> {
+        let mut short_code = self.generate_short_code(); //get new short_code
+
+        //check if code already exist if already generate new one
+        while self.repo.get_url_by_code(&short_code).await?.is_some()  {
+            short_code = self.generate_short_code();
+        }
+
+        self.repo.create_short_url(&short_code, long_urls).await?;
+
+        Ok(short_code)
+    }
 }

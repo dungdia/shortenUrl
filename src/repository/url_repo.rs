@@ -29,4 +29,17 @@ impl UrlRepository {
         .fetch_optional(&self.mysql_pool)
         .await
     }
+
+    pub async fn create_short_url(&self,short_code: &str ,long_urls: &str) -> Result<bool,sqlx::Error> {
+        let result = sqlx::query!("INSERT INTO urls (short_code, long_url) VALUES (?, ?)",
+        short_code,
+        long_urls)
+        .execute(&self.mysql_pool)
+        .await?;
+
+        if result.rows_affected() > 0 {
+           return Ok(true);
+        }
+        Ok(false)
+    }
 }

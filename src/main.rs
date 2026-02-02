@@ -11,6 +11,7 @@ mod repository;
 mod service;
 mod routes;
 mod models;
+mod dtos;
 
 pub struct AppState {
     pub url_service: UrlService,
