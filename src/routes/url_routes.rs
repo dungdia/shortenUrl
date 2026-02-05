@@ -7,9 +7,10 @@ use crate::{AppState, dtos::url_dto::{UrlRequest, UrlResponse}};
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(get_all_url
-        ,redirect_url
-        ,create_short_url),
+    paths(get_all_url,
+        redirect_url,
+        create_short_url,
+        view_url),
     components(
         schemas(UrlRequest, UrlResponse)
     ),
@@ -108,10 +109,35 @@ pub async fn create_short_url(State(state): State<Arc<AppState>>,
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/view/{short_code}",
+    tag = "URL Management",
+    params(("short_code" = String, Path, description = "Mã rút gọn 10 ký tự")),
+    responses(
+        (status = 302, description = "Redirect thành công"),
+        (status = 404, description = "Không tìm thấy link")
+    )
+)]
+pub async fn view_url(Path(short_code): Path<String>,State(state): State<Arc<AppState>>) -> impl IntoResponse{
+    match state.url_service.get_url_by_code(&short_code).await {
+        Ok(urls) =>  match urls {
+                Some(url_model) => url_model.long_url.into_response(),
+                None => StatusCode::NOT_FOUND.into_response()
+        },
+        Err(sqlx::Error::RowNotFound) => StatusCode::NOT_FOUND.into_response(),
+        Err(err) => {
+            eprintln!("{}",err);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        },
+ }
+}
+
 
 pub fn create_route() -> Router<Arc<AppState>> {
     Router::new()
     .route("/api/get_all", get(get_all_url))
     .route("/:short_code", get(redirect_url))
     .route("/api/create", post(create_short_url))
+    .route("/api/view/:short_code", get(view_url))
 } 
