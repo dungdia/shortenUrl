@@ -40,4 +40,15 @@ impl UrlService {
 
         Ok(short_code)
     }
+
+    pub async fn update_long_url(&self,short_code: &str, long_urls: &str) -> Result<bool,sqlx::Error>{
+        if !self.repo.get_url_by_code(short_code).await?.is_some() {
+           
+            return Err(sqlx::Error::RowNotFound);
+        };
+    
+        self.repo.update_long_url(short_code, long_urls).await?;
+    
+        Ok(true)
+    }
 }

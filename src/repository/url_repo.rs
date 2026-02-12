@@ -42,4 +42,15 @@ impl UrlRepository {
         }
         Ok(false)
     }
+
+    pub async fn update_long_url(&self,short_urls: &str, new_long_urls: &str) -> Result<bool,sqlx::Error> {
+        let result = sqlx::query!("UPDATE urls SET long_url = ? WHERE short_code = ?",
+        new_long_urls,
+        short_urls)
+        .execute(&self.mysql_pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
 }

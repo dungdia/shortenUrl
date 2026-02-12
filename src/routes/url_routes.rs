@@ -10,6 +10,7 @@ use crate::{AppState, dtos::url_dto::{UrlRequest, UrlResponse}};
     paths(get_all_url,
         redirect_url,
         create_short_url,
+        update_long_url,
         view_url),
     components(
         schemas(UrlRequest, UrlResponse)
@@ -133,6 +134,39 @@ pub async fn view_url(Path(short_code): Path<String>,State(state): State<Arc<App
  }
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/update/{short_code}",
+    tag = "URL Management",
+    params(("short_code" = String, Path, description = "Mã rút gọn 10 ký tự")),
+    request_body = UrlRequest,
+    responses(
+        (status = 201, description = "Cập nhật URL thành công"),
+        (status = 400, description = "URL không hợp lệ"),
+        (status = 404, description = "Mã rút gọn không tồn tại"),
+        (status = 500, description = "Lỗi hệ thống")
+    )
+)]
+pub async fn update_long_url(State(state): State<Arc<AppState>>,
+    Path(short_code): Path<String>,
+    Json(payload): Json<UrlRequest>) -> impl IntoResponse {
+    //check body validate
+    if let Err(err) = payload.validate() {
+        return (StatusCode::BAD_REQUEST, format!("Validation error: {:?}", err.to_string())).into_response();
+    }
+
+    match state.url_service
+    .update_long_url(&short_code, &payload.long_url)
+    .await {
+        Ok(_) => (StatusCode::CREATED, "update url successfully!".to_string()).into_response(),
+        Err(sqlx::Error::RowNotFound) => (StatusCode::NOT_FOUND,"Short code not found".to_string()).into_response(),
+        Err(err) => {
+            eprintln!("some thing went wrong when update long_url: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
 
 pub fn create_route() -> Router<Arc<AppState>> {
     Router::new()
@@ -140,4 +174,5 @@ pub fn create_route() -> Router<Arc<AppState>> {
     .route("/:short_code", get(redirect_url))
     .route("/api/create", post(create_short_url))
     .route("/api/view/:short_code", get(view_url))
+    .route("/api/update/:short_code", put(update_long_url))
 } 
