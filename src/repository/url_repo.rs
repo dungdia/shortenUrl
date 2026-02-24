@@ -53,4 +53,11 @@ impl UrlRepository {
         Ok(result.rows_affected() > 0)
     }
 
+    pub async fn delete_url(&self, short_urls: &str) -> Result<bool,sqlx::Error>{
+        let result = sqlx::query!("DELETE FROM urls WHERE short_code = ?",short_urls)
+        .execute(&self.mysql_pool)
+        .await?;
+
+      Ok(result.rows_affected() > 0)
+    }
 }

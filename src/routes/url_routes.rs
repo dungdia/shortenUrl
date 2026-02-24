@@ -11,6 +11,7 @@ use crate::{AppState, dtos::url_dto::{UrlRequest, UrlResponse}};
         redirect_url,
         create_short_url,
         update_long_url,
+        delete_url,
         view_url),
     components(
         schemas(UrlRequest, UrlResponse)
@@ -167,6 +168,29 @@ pub async fn update_long_url(State(state): State<Arc<AppState>>,
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/delete/{short_code}",
+    tag = "URL Management",
+    params(("short_code" = String, Path, description = "Mã rút gọn 10 ký tự")),
+    responses(
+        (status = 200, description = "Xóa URL thành công"),
+        (status = 404, description = "Mã rút gọn không tồn tại"),
+        (status = 500, description = "Lỗi hệ thống")
+    )
+)]
+pub async fn delete_url(State(state): State<Arc<AppState>>,Path(short_code): Path<String>) 
+-> impl IntoResponse {
+    match state.url_service.delete_url(&short_code).await {
+        Ok(_) => (StatusCode::OK, "delete url successfully!".to_string()).into_response(),
+        Err(sqlx::Error::RowNotFound) => (StatusCode::NOT_FOUND,"Short code not found".to_string()).into_response(),
+        Err(err) => {
+            eprintln!("some thing went wrong when delete url: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        } 
+    }
+}
+
 
 pub fn create_route() -> Router<Arc<AppState>> {
     Router::new()
@@ -174,5 +198,6 @@ pub fn create_route() -> Router<Arc<AppState>> {
     .route("/:short_code", get(redirect_url))
     .route("/api/create", post(create_short_url))
     .route("/api/view/:short_code", get(view_url))
+    .route("/api/delete/:short_code", delete(delete_url))
     .route("/api/update/:short_code", put(update_long_url))
 } 

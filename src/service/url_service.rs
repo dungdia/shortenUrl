@@ -51,4 +51,15 @@ impl UrlService {
     
         Ok(true)
     }
+
+    pub async fn delete_url(&self,short_code: &str) -> Result<bool, sqlx::Error>{
+        if !self.repo.get_url_by_code(short_code).await?.is_some() {
+           
+            return Err(sqlx::Error::RowNotFound);
+        };
+
+        self.repo.delete_url(short_code).await?;
+
+        Ok(true)
+    }
 }
