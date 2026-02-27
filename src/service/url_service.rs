@@ -5,13 +5,16 @@ use nanoid::nanoid;
 use crate::repository::url_repo::UrlRepository;
 use crate::models::url_models::UrlModel;
 
+use super::cache_service::CacheService;
+
 pub struct UrlService {
     pub repo: Arc<UrlRepository>,
+    pub cache_service: Arc<CacheService>
 }
 
 impl UrlService {
-    pub fn new(repo: Arc<UrlRepository>) -> Self {
-        Self { repo }
+    pub fn new(repo: Arc<UrlRepository>,cache_service: Arc<CacheService>) -> Self {
+        Self { repo, cache_service }
     }
 
     pub async fn get_all_url(&self) -> Result<Vec<UrlModel>, sqlx::Error> {

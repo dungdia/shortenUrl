@@ -1,7 +1,7 @@
 use axum::Router;
 use dotenvy::dotenv;
 use repository::url_repo;
-use service::url_service::UrlService;
+use service::{cache_service::CacheService, url_service::UrlService};
 use std::{env, net::SocketAddr, sync::Arc};
 use utoipa::OpenApi;
 use utoipa_scalar::{Scalar, Servable as ScalarServable};
@@ -32,9 +32,15 @@ async fn main() {
     dotenv().ok();
 
     let db_context = utils::db::DbContext::init().await;
+    let cache_ttl = env::var("REDIS_CACHE_TTL_SECONDS")
+    .ok()
+    .and_then(|s| s.parse::<u64>().ok())
+    .unwrap_or(3600); // Mặc định TTL là 1 giờ nếu không có biến môi trường
+
+    let cache_service = CacheService::new(db_context.redis_pool, cache_ttl); // TTL mặc định 1 giờ
 
     let url_repo = Arc::new(url_repo::UrlRepository::new(db_context.mysql_pool));
-    let url_service = UrlService::new(url_repo);
+    let url_service = UrlService::new(url_repo,Arc::new(cache_service));
     
     let app_state = Arc::new(AppState {
         url_service,
