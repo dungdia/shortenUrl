@@ -3,7 +3,7 @@ use std::{ env, sync::Arc};
 use axum::{ Json, Router, extract::{Path, State}, http::{StatusCode}, response::{IntoResponse, Redirect}, routing::{delete, get, post, put}};
 use utoipa::OpenApi;
 use validator::Validate;
-use crate::{AppState, dtos::url_dto::{UrlRequest, UrlResponse}};
+use crate::{AppState, dtos::url_dto::{UrlRequest, UrlResponse}, utils::custom_error::CustomError};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -56,7 +56,7 @@ pub async fn redirect_url(Path(short_code): Path<String>,State(state): State<Arc
                     return Redirect::temporary(&url_model.long_url).into_response();},
                 None => StatusCode::NOT_FOUND.into_response()
         },
-        Err(sqlx::Error::RowNotFound) => StatusCode::NOT_FOUND.into_response(),
+        Err(CustomError::NotFound(_)) => StatusCode::NOT_FOUND.into_response(),
         Err(err) => {
             eprintln!("{}",err);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -127,7 +127,7 @@ pub async fn view_url(Path(short_code): Path<String>,State(state): State<Arc<App
                 Some(url_model) => url_model.long_url.into_response(),
                 None => StatusCode::NOT_FOUND.into_response()
         },
-        Err(sqlx::Error::RowNotFound) => StatusCode::NOT_FOUND.into_response(),
+        Err(CustomError::NotFound(_)) => StatusCode::NOT_FOUND.into_response(),
         Err(err) => {
             eprintln!("{}",err);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -160,7 +160,7 @@ pub async fn update_long_url(State(state): State<Arc<AppState>>,
     .update_long_url(&short_code, &payload.long_url)
     .await {
         Ok(_) => (StatusCode::CREATED, "update url successfully!".to_string()).into_response(),
-        Err(sqlx::Error::RowNotFound) => (StatusCode::NOT_FOUND,"Short code not found".to_string()).into_response(),
+        Err(CustomError::NotFound(msg)) => CustomError::NotFound(msg).into_response(),
         Err(err) => {
             eprintln!("some thing went wrong when update long_url: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -183,7 +183,7 @@ pub async fn delete_url(State(state): State<Arc<AppState>>,Path(short_code): Pat
 -> impl IntoResponse {
     match state.url_service.delete_url(&short_code).await {
         Ok(_) => (StatusCode::OK, "delete url successfully!".to_string()).into_response(),
-        Err(sqlx::Error::RowNotFound) => (StatusCode::NOT_FOUND,"Short code not found".to_string()).into_response(),
+        Err(CustomError::NotFound(msg)) => CustomError::NotFound(msg).into_response(),
         Err(err) => {
             eprintln!("some thing went wrong when delete url: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()

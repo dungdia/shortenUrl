@@ -4,6 +4,7 @@ use nanoid::nanoid;
 
 use crate::repository::url_repo::UrlRepository;
 use crate::models::url_models::UrlModel;
+use crate::utils::custom_error::CustomError;
 
 use super::cache_service::CacheService;
 
@@ -17,21 +18,23 @@ impl UrlService {
         Self { repo, cache_service }
     }
 
-    pub async fn get_all_url(&self) -> Result<Vec<UrlModel>, sqlx::Error> {
+    pub async fn get_all_url(&self) -> Result<Vec<UrlModel>, CustomError> {
         let result = self.repo.get_all_url().await?;
 
         Ok(result)
     }
 
-    pub async fn get_url_by_code(&self, short_code: &str) -> Result<Option<UrlModel>, sqlx::Error> {
-        self.repo.get_url_by_code(short_code).await
+    pub async fn get_url_by_code(&self, short_code: &str) -> Result<Option<UrlModel>, CustomError> {
+        let result = self.repo.get_url_by_code(short_code).await?;
+
+        Ok(result)
     }
     
     fn generate_short_code(&self) -> String{
         nanoid!(10) //generate new short code with length = 10 using nanoid
     }
 
-    pub async fn create_short_url(&self, long_urls: &str) -> Result<String,sqlx::Error> {
+    pub async fn create_short_url(&self, long_urls: &str) -> Result<String,CustomError> {
         let mut short_code = self.generate_short_code(); //get new short_code
 
         //check if code already exist if already generate new one
@@ -44,10 +47,10 @@ impl UrlService {
         Ok(short_code)
     }
 
-    pub async fn update_long_url(&self,short_code: &str, long_urls: &str) -> Result<bool,sqlx::Error>{
+    pub async fn update_long_url(&self,short_code: &str, long_urls: &str) -> Result<bool,CustomError>{
         if !self.repo.get_url_by_code(short_code).await?.is_some() {
            
-            return Err(sqlx::Error::RowNotFound);
+            return Err(CustomError::NotFound(Some("Url not found".to_string())));
         };
     
         self.repo.update_long_url(short_code, long_urls).await?;
@@ -55,10 +58,10 @@ impl UrlService {
         Ok(true)
     }
 
-    pub async fn delete_url(&self,short_code: &str) -> Result<bool, sqlx::Error>{
+    pub async fn delete_url(&self,short_code: &str) -> Result<bool, CustomError>{
         if !self.repo.get_url_by_code(short_code).await?.is_some() {
            
-            return Err(sqlx::Error::RowNotFound);
+            return Err(CustomError::NotFound(Some("Url not found".to_string())));
         };
 
         self.repo.delete_url(short_code).await?;

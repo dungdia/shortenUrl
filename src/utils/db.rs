@@ -22,12 +22,6 @@ impl DbContext {
             .await
             .expect("Failed to connect to MySQL");
 
-        let mysql_pool = MySqlPoolOptions::new()
-            .max_connections(max_connections)
-            .connect(&db_url)
-            .await
-            .expect("Failed to connect to MySQL");
-
         let cfg = Config::from_url(redis_url);
         let redis_pool = cfg
             .create_pool(Some(Runtime::Tokio1))
