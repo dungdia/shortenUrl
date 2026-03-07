@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use nanoid::nanoid;
 
+use crate::constants::cache_key;
 use crate::repository::url_repo::UrlRepository;
 use crate::models::url_models::UrlModel;
 use crate::utils::custom_error::CustomError;
@@ -25,7 +26,20 @@ impl UrlService {
     }
 
     pub async fn get_url_by_code(&self, short_code: &str) -> Result<Option<UrlModel>, CustomError> {
+        let cache_key = cache_key::format_url_key(short_code); //tạo cache key với format url:{short_code}
+        let cache_result = self.cache_service.get_key(&cache_key).await?; //lấy dữ liệu từ cache
+
+        if let Some(cached_data) = cache_result {
+            let url_model: UrlModel = serde_json::from_str(&cached_data)?; //chuyển dữ liệu từ cache về struct UrlModel
+            return Ok(Some(url_model));
+        }
+
         let result = self.repo.get_url_by_code(short_code).await?;
+
+        if let Some(ref url_model ) = result {
+            let cache_value = serde_json::to_string(url_model)?; //chuyển dữ liệu về string để lưu vào cache
+            self.cache_service.set_key_string(&cache_key, &cache_value).await?; //lưu vào cache
+        }
 
         Ok(result)
     }
@@ -54,6 +68,9 @@ impl UrlService {
         };
     
         self.repo.update_long_url(short_code, long_urls).await?;
+
+        //remove cache after update long url
+        self.cache_service.delete_key(&cache_key::format_url_key(short_code)).await?;
     
         Ok(true)
     }
@@ -65,6 +82,9 @@ impl UrlService {
         };
 
         self.repo.delete_url(short_code).await?;
+
+         //remove cache after delete url
+        self.cache_service.delete_key(&cache_key::format_url_key(short_code)).await?;
 
         Ok(true)
     }
