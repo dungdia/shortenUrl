@@ -6,7 +6,6 @@ use crate::constants::cache_key;
 use crate::repository::url_repo::UrlRepository;
 use crate::models::url_models::UrlModel;
 use crate::utils::custom_error::CustomError;
-
 use super::cache_service::CacheService;
 
 pub struct UrlService {
@@ -15,7 +14,7 @@ pub struct UrlService {
 }
 
 impl UrlService {
-    pub fn new(repo: Arc<UrlRepository>,cache_service: Arc<CacheService>) -> Self {
+    pub fn new(repo: Arc<UrlRepository> ,cache_service: Arc<CacheService>) -> Self {
         Self { repo, cache_service }
     }
 

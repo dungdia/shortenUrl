@@ -1,7 +1,7 @@
 use axum::Router;
 use dotenvy::dotenv;
 use repository::url_repo;
-use service::{cache_service::CacheService, url_service::UrlService};
+use service::{cache_service::CacheService, url_service::UrlService, analysis_service::AnalyticsService};
 use std::{env, net::SocketAddr, sync::Arc};
 use utoipa::OpenApi;
 use utoipa_scalar::{Scalar, Servable as ScalarServable};
@@ -16,6 +16,7 @@ mod constants;
 
 pub struct AppState {
     pub url_service: UrlService,
+    pub analysis_service: AnalyticsService,
 }
 
 // Cấu hình OpenAPI
@@ -40,11 +41,16 @@ async fn main() {
 
     let cache_service = CacheService::new(db_context.redis_pool, cache_ttl); // TTL mặc định 1 giờ
 
-    let url_repo = Arc::new(url_repo::UrlRepository::new(db_context.mysql_pool));
-    let url_service = UrlService::new(url_repo,Arc::new(cache_service));
+    let analysis_repo = Arc::new(repository::analysis_repo::AnalyticsRepository::new(db_context.mysql_pool.clone()));
+    let analysis_service = service::analysis_service::AnalyticsService::new(analysis_repo);
+
+    let url_repo = Arc::new(url_repo::UrlRepository::new(db_context.mysql_pool.clone()));
+    let url_service = UrlService::new(url_repo,
+        Arc::new(cache_service));
     
     let app_state = Arc::new(AppState {
         url_service,
+        analysis_service
     });
     
     let mut openapi = ApiDoc::openapi();
@@ -59,9 +65,11 @@ async fn main() {
     let port = env::var("SERVER_PORT").expect("SERVER_PORT not found");
     let addr = format!("{}:{}", host, port);
 
+    let base_url = env::var("BASE_URL").expect("BASE_URL not found");
+
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    println!("🚀 Server đang chạy tại: http://{}", addr);
-    println!("📄 Tài liệu API (Scalar): http://{}/scalar", addr);
+    println!("🚀 Server đang chạy tại: {}", base_url);
+    println!("📄 Tài liệu API (Scalar): {}/scalar", base_url);
 
     axum::serve(listener, 
         app.into_make_service_with_connect_info::<SocketAddr>()

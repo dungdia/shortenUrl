@@ -1,6 +1,5 @@
-use std::{ env, sync::Arc};
-
-use axum::{ Json, Router, extract::{Path, State}, http::{StatusCode}, response::{IntoResponse, Redirect}, routing::{delete, get, post, put}};
+use std::{ env, net::SocketAddr, sync::Arc};
+use axum::{ Json, Router, extract::{ConnectInfo, Path, State}, http::{HeaderMap, StatusCode}, response::{IntoResponse, Redirect}, routing::{delete, get, post, put}};
 use utoipa::OpenApi;
 use validator::Validate;
 use crate::{AppState, dtos::url_dto::{UrlRequest, UrlResponse}, utils::custom_error::CustomError};
@@ -49,10 +48,40 @@ pub async fn get_all_url(State(state): State<Arc<AppState>>) -> impl IntoRespons
         (status = 404, description = "Không tìm thấy link")
     )
 )]
-pub async fn redirect_url(Path(short_code): Path<String>,State(state): State<Arc<AppState>>) -> impl IntoResponse{
+pub async fn redirect_url(Path(short_code): Path<String>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap) -> impl IntoResponse{
+
     match state.url_service.get_url_by_code(&short_code).await {
         Ok(urls) =>  match urls {
                 Some(url_model) => {
+                    let url_id = url_model.id;
+                    // Lấy IP khách truy cập từ header X-Forwarded-For (trường hợp thông qua proxy như nginx,...)
+                    // Nếu không có header này, có thể lấy IP từ kết nối trực tiếp
+                    let visitor_ip = headers
+                                    .get("x-forwarded-for")
+                                    .and_then(|v| v.to_str().ok())
+                                    // X-Forwarded-For có thể là một chuỗi IP cách nhau bởi dấu phẩy, lấy cái đầu tiên
+                                    .and_then(|s| s.split(',').next())
+                                    .map(|s| s.trim().to_string())
+                                    // Nếu không có header thì lấy IP từ kết nối trực tiếp
+                                    .unwrap_or_else(|| addr.ip().to_string());
+
+                
+                    let ua_str = headers
+                                    .get("user-agent")
+                                    .and_then(|v| v.to_str().ok())
+                                    .map(|s| s.to_string());
+                    
+                    let state_clone = state.clone();
+
+                    tokio::spawn({
+                        async move {
+                            state_clone.analysis_service.log_visit(url_id, Some(visitor_ip), ua_str).await;
+                        }
+                    });
+
                     return Redirect::temporary(&url_model.long_url).into_response();},
                 None => StatusCode::NOT_FOUND.into_response()
         },
