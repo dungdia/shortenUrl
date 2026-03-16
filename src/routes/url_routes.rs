@@ -11,7 +11,9 @@ use crate::{AppState, dtos::url_dto::{UrlRequest, UrlResponse}, utils::custom_er
         create_short_url,
         update_long_url,
         delete_url,
-        view_url),
+        view_url,
+        get_all_click_stats,
+        get_click_stats_by_url),
     components(
         schemas(UrlRequest, UrlResponse)
     ),
@@ -221,6 +223,47 @@ pub async fn delete_url(State(state): State<Arc<AppState>>,Path(short_code): Pat
 }
 
 
+#[utoipa::path(
+    get,
+    path = "/api/get_all_click_stats",
+    tag = "URL Management",
+    responses(
+        (status = 200, description = "Danh sách thống kê click"),
+        (status = 500, description = "Lỗi hệ thống")
+    )
+)]
+pub async fn get_all_click_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.analysis_service.get_all_click_stats().await {
+        Ok(stats) => Json(stats).into_response(),
+        Err(err) => {
+            eprintln!("Error fetching click stats: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/get_click_stats/{short_code}",
+    tag = "URL Management",
+    params(("short_code" = String, Path, description = "Mã rút gọn 10 ký tự")),
+    responses(
+        (status = 200, description = "Thống kê click của URL"),
+        (status = 404, description = "Không tìm thấy URL"),
+        (status = 500, description = "Lỗi hệ thống")
+    )
+)]
+pub async fn get_click_stats_by_url(Path(short_code): Path<String>, State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.analysis_service.get_click_stats_by_url(short_code).await {
+        Ok(Some(stat)) => Json(stat).into_response(),
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(err) => {
+            eprintln!("Error fetching click stats: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
 pub fn create_route() -> Router<Arc<AppState>> {
     Router::new()
     .route("/api/get_all", get(get_all_url))
@@ -229,4 +272,6 @@ pub fn create_route() -> Router<Arc<AppState>> {
     .route("/api/view/:short_code", get(view_url))
     .route("/api/delete/:short_code", delete(delete_url))
     .route("/api/update/:short_code", put(update_long_url))
+    .route("/api/get_all_click_stats", get(get_all_click_stats))
+    .route("/api/get_click_stats/:short_code", get(get_click_stats_by_url))
 } 

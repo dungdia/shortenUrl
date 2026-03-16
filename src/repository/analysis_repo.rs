@@ -1,5 +1,7 @@
 use sqlx::MySqlPool;
 
+use crate::models::analysis_models::UrlClickCount;
+
 pub struct AnalyticsRepository {
     pool: MySqlPool,
 }
@@ -18,28 +20,40 @@ impl AnalyticsRepository {
         .await?;
         Ok(())
     }
-
-    pub async fn count_clicks(&self, url_id: i32) -> Result<i64, sqlx::Error> {
-        let row = sqlx::query!("SELECT COUNT(*) as count FROM access_logs WHERE url_id = ?", url_id)
-            .fetch_one(&self.pool)
-            .await?;
-        Ok(row.count as i64)
-    }
-
-    pub async fn get_clicks_in_range(
-        &self, 
-        url_id: i32, 
-        start: chrono::NaiveDateTime, 
-        end: chrono::NaiveDateTime
-    ) -> Result<i64, sqlx::Error> {
-        let row = sqlx::query!(
-            "SELECT COUNT(*) as count FROM access_logs 
-             WHERE url_id = ? AND accessed_at BETWEEN ? AND ?",
-            url_id, start, end
+    pub async fn get_click_stats_by_url(&self, short_code: String) -> Result<Option<UrlClickCount>, sqlx::Error> {
+        sqlx::query_as::<sqlx::MySql, UrlClickCount>(
+            r#"
+            SELECT 
+                u.id as url_id, 
+                u.long_url, 
+                u.short_code, 
+                COUNT(a.id) as click_count
+            FROM urls u
+            LEFT JOIN access_logs a ON u.id = a.url_id
+            WHERE u.short_code = ?
+            GROUP BY u.id
+            "#
         )
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(row.count as i64)
+        .bind(short_code)
+        .fetch_optional(&self.pool)
+        .await
     }
+
+    pub async fn get_all_click_stats(&self) -> Result<Vec<UrlClickCount>, sqlx::Error> {
+        sqlx::query_as::<sqlx::MySql, UrlClickCount>(
+            r#"
+            SELECT 
+                u.id as url_id, 
+                u.long_url, 
+                u.short_code, 
+                COUNT(a.id) as click_count
+            FROM urls u
+            LEFT JOIN access_logs a ON u.id = a.url_id
+            GROUP BY u.id
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
+
 }
