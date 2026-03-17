@@ -40,7 +40,8 @@ impl IntoResponse for CustomError {
             CustomError::NotFound(msg) => (StatusCode::NOT_FOUND, msg
                 .unwrap_or_else(|| -> String { "Không tìm thấy dữ liệu".to_string() })
             ).into_response(),
-            CustomError::DatabaseError(_) | CustomError::RedisPoolError(_) | CustomError::RedisError(_) | CustomError::SerializationError(_) | CustomError::Internal(_) => {
+            CustomError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg).into_response(),
+            _ => {
                 eprintln!("Internal error: {}", self);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Lỗi hệ thống").into_response()
             }
