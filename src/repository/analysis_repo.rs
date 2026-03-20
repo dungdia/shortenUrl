@@ -56,4 +56,67 @@ impl AnalyticsRepository {
         .await
     }
 
+    pub async fn get_paginated_urls(
+        &self, 
+        search: Option<String>,
+        limit: i64, 
+        offset: i64
+    ) -> Result<Vec<UrlClickCount>, sqlx::Error> {
+        // Tạo pattern tìm kiếm cho SQL LIKE
+        let search_term = search
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+        // 2. Sử dụng Query Builder hoặc logic IF trong SQL
+        // Ở đây ta dùng cách đơn giản: nếu search_term là Some thì thêm % %, không thì dùng NULL
+        let pattern = search_term.as_ref().map(|s| format!("%{}%", s));
+
+        sqlx::query_as::<sqlx::MySql, UrlClickCount>(
+            r#"
+            SELECT u.id as url_id, u.long_url, u.short_code, COUNT(a.id) as click_count
+            FROM urls u
+            LEFT JOIN access_logs a ON u.id = a.url_id
+            WHERE (? IS NULL OR u.short_code LIKE ? OR u.long_url LIKE ?)
+            GROUP BY u.id
+            ORDER BY u.id ASC
+            LIMIT ? OFFSET ?
+            "#
+        )
+        .bind(&pattern) // Bind cho short_code
+        .bind(&pattern) // Bind cho long_url
+        .bind(&pattern)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    pub async fn count_total_urls(&self, search: Option<String>) -> Result<i64, sqlx::Error> {
+        // 1. Làm sạch input: loại bỏ khoảng trắng và kiểm tra chuỗi rỗng
+        let search_term = search
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+    
+        // 2. Chỉ tạo pattern nếu thực sự có từ khóa tìm kiếm
+        let pattern = search_term.as_ref().map(|s| format!("%{}%", s));
+    
+        // 3. Sử dụng logic (? IS NULL) để MySQL có thể tối ưu hóa query
+        // Nếu pattern là None, MySQL sẽ bỏ qua các điều kiện LIKE phía sau
+        let row: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*) 
+            FROM urls 
+            WHERE (? IS NULL OR short_code LIKE ? OR long_url LIKE ?)
+            "#
+        )
+        .bind(&pattern) // Bind cho kiểm tra NULL
+        .bind(&pattern) // Bind cho short_code
+        .bind(&pattern) // Bind cho long_url
+        .fetch_one(&self.pool)
+        .await?;
+    
+        Ok(row.0)
+    }
+
+
 }

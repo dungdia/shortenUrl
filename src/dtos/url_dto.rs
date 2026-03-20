@@ -17,3 +17,10 @@ pub struct UrlResponse {
     #[schema(value_type = String, format = "date-time", example = "2026-03-14T13:00:00Z")]
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(serde::Deserialize)]
+pub struct PaginationParams {
+    pub page: Option<i64>,
+    pub q: Option<String>,
+    pub per_page: Option<i64>,
+}

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use crate::models::generic_model::PaginatedResponse;
 use crate::repository::analysis_repo::AnalyticsRepository;
 use crate::models::analysis_models::UrlClickCount;
 use crate::utils::custom_error::CustomError;
@@ -29,4 +30,45 @@ impl AnalyticsService {
 
         Ok(sqlx_result)
     }
+
+    
+    pub async fn get_list_pagination(
+        &self, 
+        search: Option<String>, 
+        page: i64, 
+        per_page: i64
+    ) -> Result<PaginatedResponse<UrlClickCount>, CustomError> {
+        let offset = (page - 1) * per_page;
+    
+        // 1. Gọi Repo để lấy dữ liệu đã lọc và phân trang
+        let items_future = self.repo.get_paginated_urls(search.clone(), per_page, offset);
+        let total_future = self.repo.count_total_urls(search);
+    
+        // 2. Chạy song song cả 2 và đợi kết quả của cả hai trả về
+        // tokio::join! sẽ trả về một tuple chứa kết quả của từng Future
+        let (items_res, total_res) = tokio::join!(items_future, total_future);
+    
+        // 3. Xử lý lỗi của từng kết quả bằng dấu ?
+        let items = items_res?;
+        let total = total_res?;
+        
+        // 3. Tính toán tổng số trang
+        let last_page = if total == 0 {
+            1
+        } else {
+            (total as f64 / per_page as f64).ceil() as i64
+        };
+    
+        // 4. Trả về kết quả dưới dạng PaginatedResponse
+        let response = PaginatedResponse {
+            items,
+            total,
+            page,
+            per_page,
+            last_page
+        };
+
+        Ok(response)
+    }
+   
 }

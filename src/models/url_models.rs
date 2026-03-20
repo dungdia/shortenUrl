@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 
-
 #[derive(sqlx::FromRow, serde::Serialize,serde::Deserialize)]
 pub struct UrlModel {
     pub id: i32,
@@ -8,3 +7,4 @@ pub struct UrlModel {
     pub short_code: String,
     pub created_at: DateTime<Utc>,
 }
+

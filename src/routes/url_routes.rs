@@ -1,8 +1,8 @@
 use std::{ env, net::SocketAddr, sync::Arc};
-use axum::{ Json, Router, extract::{ConnectInfo, Path, State}, http::{HeaderMap, StatusCode}, response::{IntoResponse, Redirect}, routing::{delete, get, post, put}};
+use axum::{ Json, Router, extract::{ConnectInfo, Path, Query, State}, http::{HeaderMap, StatusCode}, response::{ IntoResponse, Redirect}, routing::{delete, get, post, put}};
 use utoipa::OpenApi;
 use validator::Validate;
-use crate::{AppState, dtos::url_dto::{UrlRequest, UrlResponse}, utils::custom_error::CustomError};
+use crate::{AppState, dtos::url_dto::{PaginationParams, UrlRequest, UrlResponse}, utils::custom_error::CustomError};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -13,7 +13,8 @@ use crate::{AppState, dtos::url_dto::{UrlRequest, UrlResponse}, utils::custom_er
         delete_url,
         view_url,
         get_all_click_stats,
-        get_click_stats_by_url),
+        get_click_stats_by_url,
+        get_pagination_urls_api),
     components(
         schemas(UrlRequest, UrlResponse)
     ),
@@ -253,7 +254,8 @@ pub async fn get_all_click_stats(State(state): State<Arc<AppState>>) -> impl Int
         (status = 500, description = "Lỗi hệ thống")
     )
 )]
-pub async fn get_click_stats_by_url(Path(short_code): Path<String>, State(state): State<Arc<AppState>>) -> impl IntoResponse {
+pub async fn get_click_stats_by_url(Path(short_code): Path<String>, State(state): State<Arc<AppState>>) 
+-> impl IntoResponse {
     match state.analysis_service.get_click_stats_by_url(short_code).await {
         Ok(Some(stat)) => Json(stat).into_response(),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
@@ -263,6 +265,40 @@ pub async fn get_click_stats_by_url(Path(short_code): Path<String>, State(state)
         }
     }
 }
+
+#[utoipa::path(
+    get,
+    path = "/api/get_pagination_urls",
+    tag = "URL Management",
+    params(
+        ("page" = Option<i64>, Query, description = "Số trang (mặc định: 1)"),
+        ("per_page" = Option<i64>, Query, description = "Số bản ghi mỗi trang (mặc định: 10)"),
+        ("q" = Option<String>, Query, description = "Từ khóa tìm kiếm trong long_url")
+    ),
+    responses(
+        (status = 200, description = "Danh sách URL có phân trang"),
+        (status = 500, description = "Lỗi hệ thống")
+    )
+)]
+pub async fn get_pagination_urls_api(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<PaginationParams>,
+) -> impl IntoResponse {
+    
+    let page = params.page.unwrap_or(1);
+    let per_page = params.per_page.unwrap_or(10); // Số bản ghi mỗi trang
+    let search = params.q;
+
+    // Gọi Service đã có tokio::join! chạy song song
+    match state.analysis_service.get_list_pagination(search, page, per_page).await {
+        Ok(res) => Json(res).into_response(),
+        Err(err) => {
+            eprintln!("Error fetching click stats: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
 
 pub fn create_route() -> Router<Arc<AppState>> {
     Router::new()
@@ -274,4 +310,5 @@ pub fn create_route() -> Router<Arc<AppState>> {
     .route("/api/update/:short_code", put(update_long_url))
     .route("/api/get_all_click_stats", get(get_all_click_stats))
     .route("/api/get_click_stats/:short_code", get(get_click_stats_by_url))
+    .route("/api/get_pagination_urls", get(get_pagination_urls_api))
 } 

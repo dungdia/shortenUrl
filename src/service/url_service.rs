@@ -11,6 +11,7 @@ use super::cache_service::CacheService;
 pub struct UrlService {
     pub repo: Arc<UrlRepository>,
     pub cache_service: Arc<CacheService>
+    
 }
 
 impl UrlService {
@@ -42,7 +43,7 @@ impl UrlService {
 
         Ok(result)
     }
-    
+ 
     fn generate_short_code(&self) -> String{
         nanoid!(10) //generate new short code with length = 10 using nanoid
     }
@@ -50,8 +51,10 @@ impl UrlService {
     pub async fn create_short_url(&self, long_urls: &str) -> Result<String,CustomError> {
         let mut short_code = self.generate_short_code(); //get new short_code
 
+        const EXCLUDE_CODE:[&str;1] = ["admin"]; //list of code that we want to exclude
+
         //check if code already exist if already generate new one
-        while self.repo.get_url_by_code(&short_code).await?.is_some()  {
+        while self.repo.get_url_by_code(&short_code).await?.is_some() && EXCLUDE_CODE.contains(&short_code.as_str()) {
             short_code = self.generate_short_code();
         }
 
