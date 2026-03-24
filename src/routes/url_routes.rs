@@ -299,11 +299,16 @@ pub async fn get_pagination_urls_api(
     }
 }
 
+pub async fn admin_dashboard() -> impl IntoResponse {
+    let html_content = include_str!("../static/index.html"); 
+    axum::response::Html(html_content)
+}
+
 
 pub fn create_route() -> Router<Arc<AppState>> {
     Router::new()
+    .route("/", get(admin_dashboard))
     .route("/api/get_all", get(get_all_url))
-    .route("/:short_code", get(redirect_url))
     .route("/api/create", post(create_short_url))
     .route("/api/view/:short_code", get(view_url))
     .route("/api/delete/:short_code", delete(delete_url))
@@ -311,4 +316,5 @@ pub fn create_route() -> Router<Arc<AppState>> {
     .route("/api/get_all_click_stats", get(get_all_click_stats))
     .route("/api/get_click_stats/:short_code", get(get_click_stats_by_url))
     .route("/api/get_pagination_urls", get(get_pagination_urls_api))
+    .route("/:short_code", get(redirect_url))
 } 

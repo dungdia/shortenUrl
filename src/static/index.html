@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Shortener Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .spin-anim { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen pb-20">
+
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-indigo-600"><i class="fas fa-link mr-2"></i>URL Shortener</h1>
+                <p class="text-slate-500 text-sm">Quản lý hiệu năng cao cho 100k+ bản ghi</p>
+            </div>
+            <div class="bg-white p-2 rounded-lg shadow-sm border flex items-center gap-2">
+                <input type="text" id="longUrlInput" placeholder="Dán link dài vào đây..." class="outline-none px-3 py-2 w-64 md:w-80 text-sm">
+                <button onclick="createUrl()" class="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-indigo-700 transition">Rút gọn</button>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-t-xl border flex justify-between items-center gap-4">
+            <div class="flex items-center gap-3 flex-1">
+                <div class="relative w-full md:w-96">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="searchInput" oninput="handleSearch()" placeholder="Tìm kiếm link hoặc mã..." 
+                        class="w-full pl-10 pr-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+                </div>
+                <button onclick="refreshData()" id="refreshBtn" class="p-2.5 bg-white border rounded-lg text-slate-500 hover:text-indigo-600 transition shadow-sm" title="Làm mới">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+            <div class="text-xs text-slate-400 font-bold tracking-wider" id="statsInfo"></div>
+        </div>
+
+        <div class="bg-white border-x border-b rounded-b-xl shadow-sm overflow-hidden">
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-50 text-slate-600 text-xs uppercase font-bold border-b">
+                    <tr>
+                        <th class="p-4 w-16">ID</th>
+                        <th class="p-4">Link ngắn</th>
+                        <th class="p-4">URL Gốc</th>
+                        <th class="p-4 text-center">Clicks</th>
+                        <th class="p-4 text-right">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody id="urlTableBody" class="text-sm"></tbody>
+            </table>
+        </div>
+
+        <div class="mt-8 flex flex-col items-center">
+            <div class="flex items-center gap-1 bg-white border rounded-xl shadow-sm" id="paginationWrapper"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+        let lastPage = 1;
+        let searchTimeout;
+
+        async function loadData(page = 1) {
+            currentPage = page;
+            const q = document.getElementById('searchInput').value;
+            const tableBody = document.getElementById('urlTableBody');
+            const refreshIcon = document.querySelector('#refreshBtn i');
+            
+            refreshIcon.classList.add('spin-anim');
+            tableBody.classList.add('opacity-50');
+
+            try {
+                const res = await fetch(`/api/get_pagination_urls?page=${page}&q=${encodeURIComponent(q)}&per_page=10`);
+                const data = await res.json();
+                lastPage = data.last_page;
+                
+                renderTable(data.items);
+                renderPagination(data.page, data.last_page);
+                document.getElementById('statsInfo').innerText = `TOTAL: ${data.total.toLocaleString()}`;
+            } catch (e) {
+                Swal.fire('Lỗi!', 'Không thể kết nối API cơ sở dữ liệu', 'error');
+            } finally {
+                setTimeout(() => {
+                    refreshIcon.classList.remove('spin-anim');
+                    tableBody.classList.remove('opacity-50');
+                }, 300);
+            }
+        }
+
+        function renderTable(items) {
+            if (items.length === 0) {
+                document.getElementById('urlTableBody').innerHTML = `<tr><td colspan="5" class="p-20 text-center text-slate-400">Không có dữ liệu khớp với tìm kiếm</td></tr>`;
+                return;
+            }
+            document.getElementById('urlTableBody').innerHTML = items.map(item => `
+                <tr class="border-b last:border-none hover:bg-slate-50 transition group">
+                    <td class="p-4 text-slate-400 font-mono text-xs">${item.url_id}</td>
+                    <td class="p-4">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-indigo-600 font-mono text-sm">${item.short_code}</span>
+                            <button onclick="copy('${item.short_code}')" class="text-slate-300 hover:text-indigo-500 transition opacity-0 group-hover:opacity-100">
+                                <i class="far fa-copy"></i>
+                            </button>
+                        </div>
+                    </td>
+                    <td class="p-4 max-w-xs truncate text-slate-600" title="${item.long_url}">${item.long_url}</td>
+                    <td class="p-4 text-center font-bold text-emerald-600">${item.click_count.toLocaleString()}</td>
+                    <td class="p-4 text-right space-x-3 opacity-0 group-hover:opacity-100 transition">
+                        <button onclick="editUrl('${item.short_code.split('/').pop()}')" class="text-slate-400 hover:text-blue-500"><i class="fas fa-edit"></i></button>
+                        <button onclick="deleteUrl('${item.short_code.split('/').pop()}')" class="text-slate-400 hover:text-red-500"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // --- HÀM COPY VỚI TOAST POPUP ---
+        function copy(text) {
+            // Giữ nguyên logic ghép location của bạn
+            const fullUrl = `${document.location}${text}`;
+            navigator.clipboard.writeText(fullUrl);
+            
+            Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 2000,
+                timerProgressBar: true
+            }).fire({
+                icon: 'success',
+                title: 'Đã copy: ' + text
+            });
+        }
+
+        // --- HÀM SỬA VỚI POPUP INPUT ---
+        async function editUrl(code) {
+            const { value: newUrl } = await Swal.fire({
+                title: 'Cập nhật URL gốc',
+                input: 'url',
+                inputLabel: `Đang sửa mã: ${code}`,
+                inputPlaceholder: 'Nhập link mới (https://...)',
+                showCancelButton: true,
+                confirmButtonText: 'Lưu thay đổi',
+                cancelButtonText: 'Hủy'
+            });
+
+            if (newUrl) {
+                const res = await fetch(`/api/update/${code}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ long_url: newUrl })
+                });
+                if(res.ok) {
+                    Swal.fire('Thành công!', 'Đường dẫn đã được cập nhật.', 'success');
+                    loadData(currentPage);
+                }
+            }
+        }
+
+        // --- HÀM XÓA VỚI POPUP XÁC NHẬN ---
+        async function deleteUrl(code) {
+            const result = await Swal.fire({
+                title: 'Bạn chắc chắn chứ?',
+                text: `Mã ${code} sẽ bị xóa vĩnh viễn khỏi hệ thống!`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Đồng ý, xóa nó!',
+                cancelButtonText: 'Quay lại'
+            });
+
+            if (result.isConfirmed) {
+                const res = await fetch(`/api/delete/${code}`, { method: 'DELETE' });
+                if(res.ok) {
+                    Swal.fire('Đã xóa!', 'Dữ liệu đã được loại bỏ.', 'success');
+                    loadData(currentPage);
+                }
+            }
+        }
+
+        function refreshData() { loadData(currentPage); }
+
+        function renderPagination(current, last) {
+            const wrapper = document.getElementById('paginationWrapper');
+            let pages = [];
+            if (last <= 7) { for (let i = 1; i <= last; i++) pages.push(i); }
+            else {
+                if (current <= 4) pages = [1, 2, 3, 4, 5, '...', last];
+                else if (current >= last - 3) pages = [1, '...', last - 4, last - 3, last - 2, last - 1, last];
+                else pages = [1, '...', current - 1, current, current + 1, '...', last];
+            }
+
+            wrapper.innerHTML = pages.map(p => {
+            if (p === '...') {
+                return `
+                    <div class="relative flex items-center px-1">
+                        <button onclick="this.nextElementSibling.classList.remove('hidden'); this.nextElementSibling.focus();" 
+                            class="h-10 px-2 text-slate-400 hover:text-indigo-600 font-bold transition">...</button>
+                        <input type="number" 
+                            class="hidden absolute left-0 w-24 border-2 border-indigo-500 rounded-lg bg-white px-2 py-1 text-sm outline-none shadow-2xl z-20"
+                            onkeyup="if(event.key==='Enter') { let v=parseInt(this.value); if(v>=1 && v<=${last}) loadData(v); else Swal.fire('Lỗi', 'Trang không tồn tại', 'error'); }"
+                            onblur="this.classList.add('hidden')"
+                            placeholder="Số trang...">
+                    </div>
+                `;
+            }
+            return `
+                <button onclick="loadData(${p})" 
+                    class="h-10 min-w-[2.5rem] px-2 flex items-center justify-center rounded-lg text-sm font-semibold transition 
+                    ${p === current ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-100'}">
+                    ${p.toLocaleString()}
+                </button>
+            `;
+        }).join('');
+        }
+
+        function handleSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => loadData(1), 400);
+        }
+
+        async function createUrl() {
+            const val = document.getElementById('longUrlInput').value;
+            if(!val) return Swal.fire('Chú ý', 'Vui lòng nhập URL gốc!', 'info');
+            const res = await fetch('/api/create', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ long_url: val })
+            });
+            if(res.ok) { document.getElementById('longUrlInput').value = ''; loadData(1); }
+        }
+
+        loadData();
+    </script>
+</body>
+</html>

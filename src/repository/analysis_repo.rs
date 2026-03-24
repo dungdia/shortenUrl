@@ -78,7 +78,7 @@ impl AnalyticsRepository {
             LEFT JOIN access_logs a ON u.id = a.url_id
             WHERE (? IS NULL OR u.short_code LIKE ? OR u.long_url LIKE ?)
             GROUP BY u.id
-            ORDER BY u.id ASC
+            ORDER BY u.id DESC
             LIMIT ? OFFSET ?
             "#
         )
